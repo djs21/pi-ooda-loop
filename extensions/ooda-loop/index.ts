@@ -94,81 +94,81 @@ export default function (pi: ExtensionAPI) {
   })
 
   pi.registerCommand('ooda:config', {
-    description: 'OODA Config — view/set autoActivate, blockTools per phase',
+    description: 'OODA Config — interactive menu — view/set autoActivate, blockTools per phase',
     handler: async (args: string, cmdCtx: ExtensionCommandContext) => {
       const cwd = cmdCtx.cwd
       const parts = args.trim().split(/\s+/)
 
-      // Show config
-      if (parts.length === 0 || (parts.length === 1 && parts[0] === '')) {
-        const config = loadConfig(cwd)
-        cmdCtx.ui.notify(formatConfig(config, cwd), 'info')
-        return
-      }
+      // CLI mode if args provided
+      if (parts.length > 0 && parts[0] !== '') {
+        const sub = parts[0]
 
-      const sub = parts[0]
-
-      // /ooda:config autoActivate [true|false] [--global]
-      if (sub === 'autoActivate') {
-        const val = parts[1]
-        if (val !== 'true' && val !== 'false') {
-          cmdCtx.ui.notify('Usage: /ooda:config autoActivate true|false [--global]', 'warning')
+        // /ooda:config autoActivate [true|false] [--global]
+        if (sub === 'autoActivate') {
+          const val = parts[1]
+          if (val !== 'true' && val !== 'false') {
+            cmdCtx.ui.notify('Usage: /ooda:config autoActivate true|false [--global]', 'warning')
+            return
+          }
+          const isGlobal = parts.includes('--global')
+          const config = isGlobal ? loadConfig(cwd) : { ...DEFAULT_CONFIG }
+          config.autoActivate = val === 'true'
+          if (isGlobal) saveGlobalConfig(config)
+          else saveLocalConfig(cwd, config)
+          cmdCtx.ui.notify(`autoActivate → ${val}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
           return
         }
-        const isGlobal = parts.includes('--global')
-        const config = isGlobal ? loadConfig(cwd) : { ...DEFAULT_CONFIG }
-        config.autoActivate = val === 'true'
-        if (isGlobal) saveGlobalConfig(config)
-        else saveLocalConfig(cwd, config)
-        cmdCtx.ui.notify(`autoActivate → ${val}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
-        return
-      }
 
-      if (sub === 'block') {
-        const phase = parts[1] as OodaPhase
-        const tools = parts.slice(2).filter(p => p !== '--global')
-        const isGlobal = parts.includes('--global')
-        if (!phase || tools.length === 0) {
-          cmdCtx.ui.notify('Usage: /ooda:config block <phase> <tool...> [--global]', 'warning')
+        if (sub === 'block') {
+          const phase = parts[1] as OodaPhase
+          const tools = parts.slice(2).filter(p => p !== '--global')
+          const isGlobal = parts.includes('--global')
+          if (!phase || tools.length === 0) {
+            cmdCtx.ui.notify('Usage: /ooda:config block <phase> <tool...> [--global]', 'warning')
+            return
+          }
+          const config = loadConfig(cwd)
+          const blocked = config.blockTools[phase] || []
+          config.blockTools[phase] = [...new Set([...blocked, ...tools])]
+          if (isGlobal) saveGlobalConfig(config)
+          else saveLocalConfig(cwd, config)
+          cmdCtx.ui.notify(`🔒 ${phase}: ${config.blockTools[phase]!.join(', ')}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
           return
         }
-        const config = loadConfig(cwd)
-        const blocked = config.blockTools[phase] || []
-        config.blockTools[phase] = [...new Set([...blocked, ...tools])]
-        if (isGlobal) saveGlobalConfig(config)
-        else saveLocalConfig(cwd, config)
-        cmdCtx.ui.notify(`🔒 ${phase}: ${config.blockTools[phase]!.join(', ')}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
-        return
-      }
 
-      if (sub === 'unblock') {
-        const phase = parts[1] as OodaPhase
-        const tools = parts.slice(2).filter(p => p !== '--global')
-        const isGlobal = parts.includes('--global')
-        if (!phase || tools.length === 0) {
-          cmdCtx.ui.notify('Usage: /ooda:config unblock <phase> <tool...> [--global]', 'warning')
+        if (sub === 'unblock') {
+          const phase = parts[1] as OodaPhase
+          const tools = parts.slice(2).filter(p => p !== '--global')
+          const isGlobal = parts.includes('--global')
+          if (!phase || tools.length === 0) {
+            cmdCtx.ui.notify('Usage: /ooda:config unblock <phase> <tool...> [--global]', 'warning')
+            return
+          }
+          const config = loadConfig(cwd)
+          const blocked = config.blockTools[phase] || []
+          config.blockTools[phase] = blocked.filter((t: string) => !tools.includes(t))
+          if (isGlobal) saveGlobalConfig(config)
+          else saveLocalConfig(cwd, config)
+          cmdCtx.ui.notify(`🔓 ${phase}: ${config.blockTools[phase]!.join(', ') || 'none'}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
           return
         }
-        const config = loadConfig(cwd)
-        const blocked = config.blockTools[phase] || []
-        config.blockTools[phase] = blocked.filter((t: string) => !tools.includes(t))
-        if (isGlobal) saveGlobalConfig(config)
-        else saveLocalConfig(cwd, config)
-        cmdCtx.ui.notify(`🔓 ${phase}: ${config.blockTools[phase]!.join(', ') || 'none'}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
+
+        // /ooda:config clear [--global]
+        if (sub === 'clear') {
+          const isGlobal = parts.includes('--global')
+          if (isGlobal) clearGlobalConfig()
+          else clearLocalConfig(cwd)
+          cmdCtx.ui.notify(`Config reset to defaults${isGlobal ? ' (global)' : ' (local)'}`, 'info')
+          return
+        }
+
+        // Unknown subcommand
+        cmdCtx.ui.notify(`Unknown subcommand: ${sub}. Use: autoActivate, block, unblock, clear`, 'warning')
         return
       }
 
-      // /ooda:config clear [--global]
-      if (sub === 'clear') {
-        const isGlobal = parts.includes('--global')
-        if (isGlobal) clearGlobalConfig()
-        else clearLocalConfig(cwd)
-        cmdCtx.ui.notify(`Config reset to defaults${isGlobal ? ' (global)' : ' (local)'}`, 'info')
-        return
-      }
-
-      // Unknown subcommand
-      cmdCtx.ui.notify(`Unknown subcommand: ${sub}. Use: autoActivate, block, unblock, clear`, 'warning')
+      // Interactive mode
+      await handleConfigInteractive(cwd, cmdCtx)
     },
   })
 
@@ -338,3 +338,107 @@ function createNewState() {
     artifacts: [],
   }
 }
+
+async function handleConfigInteractive(cwd: string, cmdCtx: ExtensionCommandContext) {
+  const ALL_PHASES = ['observing', 'orienting', 'deciding', 'acting', 'reviewing', 'signoff', 'idle']
+  const ALL_TOOLS = ['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'subagent']
+
+  let running = true
+  while (running) {
+    const choice = await cmdCtx.ui.select(
+      '📋 OODA Config',
+      ['[1] Auto-Activate', '[2] Block Tools', '[3] Unblock Tools', '[4] Clear Config', '[5] View Config', '[6] Done']
+    )
+    if (!choice) { running = false; break }
+
+    switch (choice) {
+      case '[1] Auto-Activate': {
+        const config = loadConfig(cwd)
+        const ok = await cmdCtx.ui.confirm(
+          'Auto-Activate',
+          `Enable auto-activation? Currently: ${config.autoActivate ? 'ON' : 'OFF'}`
+        )
+        config.autoActivate = ok
+        saveLocalConfig(cwd, config)
+        cmdCtx.ui.notify(`autoActivate → ${ok ? 'ON' : 'OFF'} (local)`, 'info')
+        break
+      }
+
+      case '[2] Block Tools': {
+        const phaseSel = await cmdCtx.ui.select('Select phase', ALL_PHASES)
+        if (!phaseSel) break
+        const phase = phaseSel as OodaPhase
+        const config = loadConfig(cwd)
+        const currentBlocked = config.blockTools[phase as OodaPhase] || []
+        // Loop select tools to block
+        let blocking = true
+        while (blocking) {
+          const availTools = ALL_TOOLS.filter(t => !currentBlocked.includes(t))
+          if (availTools.length === 0) {
+            cmdCtx.ui.notify(`All tools already blocked for "${phase}"`, 'info')
+            blocking = false
+            break
+          }
+          const toolSel = await cmdCtx.ui.select('Pick a tool to block (or Done)', [...availTools, '[Done]'])
+          if (!toolSel || toolSel === '[Done]') { blocking = false; break }
+          if (!currentBlocked.includes(toolSel)) currentBlocked.push(toolSel)
+        }
+        config.blockTools[phase as OodaPhase] = currentBlocked
+        saveLocalConfig(cwd, config)
+        cmdCtx.ui.notify(`🔒 ${phase}: ${currentBlocked.join(', ') || 'none'}`, 'info')
+        break
+      }
+
+      case '[3] Unblock Tools': {
+        const phaseSel = await cmdCtx.ui.select('Select phase', ALL_PHASES)
+        if (!phaseSel) break
+        const phase = phaseSel as OodaPhase
+        const config = loadConfig(cwd)
+        const currentBlocked = [...(config.blockTools[phase as OodaPhase] || [])]
+        if (currentBlocked.length === 0) {
+          cmdCtx.ui.notify(`No tools blocked for "${phase}"`, 'info')
+          break
+        }
+        let unblocking = true
+        while (unblocking) {
+          const toolSel = await cmdCtx.ui.select('Pick a tool to unblock (or Done)', [...currentBlocked, '[Done]'])
+          if (!toolSel || toolSel === '[Done]') { unblocking = false; break }
+          const idx = currentBlocked.indexOf(toolSel)
+          if (idx >= 0) currentBlocked.splice(idx, 1)
+          if (currentBlocked.length === 0) {
+            cmdCtx.ui.notify(`All tools unblocked from "${phase}"`, 'info')
+            unblocking = false
+            break
+          }
+        }
+        config.blockTools[phase as OodaPhase] = currentBlocked
+        saveLocalConfig(cwd, config)
+        cmdCtx.ui.notify(`🔓 ${phase}: ${currentBlocked.join(', ') || 'none'}`, 'info')
+        break
+      }
+
+      case '[4] Clear Config': {
+        const ok = await cmdCtx.ui.confirm(
+          'Clear Config',
+          'Reset config to defaults? This clears all local overrides.'
+        )
+        if (ok) {
+          clearLocalConfig(cwd)
+          cmdCtx.ui.notify('Config reset to defaults (local)', 'info')
+        }
+        break
+      }
+
+      case '[5] View Config': {
+        const config = loadConfig(cwd)
+        cmdCtx.ui.notify(formatConfig(config, cwd), 'info')
+        break
+      }
+
+      case '[6] Done':
+        running = false
+        break
+    }
+  }
+}
+
