@@ -359,7 +359,9 @@ async function handleConfigInteractive(cwd: string, cmdCtx: ExtensionCommandCont
           `Enable auto-activation? Currently: ${config.autoActivate ? 'ON' : 'OFF'}`
         )
         config.autoActivate = ok
-        saveLocalConfig(cwd, config)
+        const scope = await cmdCtx.ui.select('Simpen neng endi?', ['📍 Local (.pi/)', '🌐 Global (~/.pi/config/)'])
+        if (scope === '🌐 Global (~/.pi/config/)') saveGlobalConfig(config)
+        else saveLocalConfig(cwd, config)
         cmdCtx.ui.notify(`autoActivate → ${ok ? 'ON' : 'OFF'} (local)`, 'info')
         break
       }
@@ -384,7 +386,9 @@ async function handleConfigInteractive(cwd: string, cmdCtx: ExtensionCommandCont
           if (!currentBlocked.includes(toolSel)) currentBlocked.push(toolSel)
         }
         config.blockTools[phase as OodaPhase] = currentBlocked
-        saveLocalConfig(cwd, config)
+        const scope = await cmdCtx.ui.select('Simpen neng endi?', ['📍 Local (.pi/)', '🌐 Global (~/.pi/config/)'])
+        if (scope === '🌐 Global (~/.pi/config/)') saveGlobalConfig(config)
+        else saveLocalConfig(cwd, config)
         cmdCtx.ui.notify(`🔒 ${phase}: ${currentBlocked.join(', ') || 'none'}`, 'info')
         break
       }
@@ -412,7 +416,9 @@ async function handleConfigInteractive(cwd: string, cmdCtx: ExtensionCommandCont
           }
         }
         config.blockTools[phase as OodaPhase] = currentBlocked
-        saveLocalConfig(cwd, config)
+        const scope = await cmdCtx.ui.select('Simpen neng endi?', ['📍 Local (.pi/)', '🌐 Global (~/.pi/config/)'])
+        if (scope === '🌐 Global (~/.pi/config/)') saveGlobalConfig(config)
+        else saveLocalConfig(cwd, config)
         cmdCtx.ui.notify(`🔓 ${phase}: ${currentBlocked.join(', ') || 'none'}`, 'info')
         break
       }
@@ -423,7 +429,9 @@ async function handleConfigInteractive(cwd: string, cmdCtx: ExtensionCommandCont
           'Reset config to defaults? This clears all local overrides.'
         )
         if (ok) {
-          clearLocalConfig(cwd)
+          const scope = await cmdCtx.ui.select('Simpen neng endi?', ['📍 Local (.pi/)', '🌐 Global (~/.pi/config/)'])
+          if (scope === '🌐 Global (~/.pi/config/)') clearGlobalConfig()
+          else clearLocalConfig(cwd)
           cmdCtx.ui.notify('Config reset to defaults (local)', 'info')
         }
         break
