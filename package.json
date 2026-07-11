@@ -1,0 +1,27 @@
+{
+  "name": "pi-ooda-loop",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "OODA Loop — pi extension for structured workflow orchestration with sub-agent supervision",
+  "pi": {
+    "extensions": [
+      "./extensions/ooda-loop/index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
