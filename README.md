@@ -19,9 +19,9 @@ tmux new -A -s pi 'pi'
 ## Commands
 
 | Command | Description |
-|---|---|
 | `/ooda:activate` | 🎯 Aktifkan OODA orchestrator mode — agent otomatis OODA tiap task |
 | `/ooda:deactivate` | Balik ke mode normal |
+| `/ooda:config` | View/set autoActivate, blockTools per phase (global/local) |
 | `/ooda:context` | Fast check: branch, git status, mux, test config |
 | `/ooda:plan <feature>` | Plan: scout → PRD → task grouping + batches |
 | `/ooda:tdd` | TDD gate design RED-GREEN-REFACTOR per task |
@@ -47,6 +47,38 @@ System prompt di-inject. Agent otomatis:
 7. **Sign-off:** merge, push, archive
 
 Semua command manual tetap bisa dipake sebagai override.
+Semua command manual tetap bisa dipake sebagai override.
+
+## Auto-Activate
+
+Set `autoActivate: true` biar OODA mode aktif otomatis tiap kali pi start:
+
+```bash
+/ooda:config autoActivate true
+# atau global:
+/ooda:config autoActivate true --global
+```
+
+## Tool Blocking
+
+Tool bisa diblok per phase. Model gak bakal lihat tool di list available:
+
+```bash
+/ooda:config block observing write edit
+/ooda:config block reviewing write edit
+/ooda:config unblock reviewing write
+# Cek config:
+/ooda:config
+```
+
+Default blok:
+- `observing`: write, edit (read-only)
+- `reviewing`: write, edit (read-only)
+- `signoff`: write, edit (user decision)
+- Lainnya: none (full access)
+
+Tools diblok pake **`pi.setActiveTools()`** — tool benar-benar dicabut dari active set,
+model gak bisa panggil sama sekali.
 
 ## All-Knowing (Scout-Driven)
 

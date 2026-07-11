@@ -11,12 +11,33 @@ import { snapshotAllWorkers, formatWorkerSummary } from './supervisor/watcher'
 import { analyzeWorkers, formatInsights } from './supervisor/thinker'
 import { gatherContext, formatContext } from './supervisor/all-knowing'
 import { buildOrchestratorPrompt } from './supervisor/ooda-brain'
+import { loadConfig, saveLocalConfig, saveGlobalConfig, clearLocalConfig, clearGlobalConfig, getBlockedTools, formatConfig, DEFAULT_CONFIG } from './shared/config'
+import type { OodaPhase } from './shared/types'
 
 export default function (pi: ExtensionAPI) {
   // ─── System Prompt Injection ──────────────────────────
   pi.on('before_agent_start', async (_event: unknown, ctx: any) => {
-    const state = loadState(ctx.cwd)
-    if (state?.oodaMode) {
+    const cwd = ctx.cwd
+    const state = loadState(cwd)
+    const config = loadConfig(cwd)
+
+    // Auto-activate if configured and no active state
+    if (config.autoActivate && (!state || !state.oodaMode)) {
+      const newState = state || createNewState()
+      newState.oodaMode = true
+      newState.phase = newState.phase === 'idle' ? 'observing' : newState.phase
+      saveState(cwd, newState)
+    }
+
+    const activeState = loadState(cwd)
+    if (activeState?.oodaMode) {
+      // Block tools per phase
+      const blocked = getBlockedTools(config, activeState.phase)
+      if (blocked.length > 0) {
+        const active = pi.getActiveTools()
+        const filtered = active.filter((t: string) => !blocked.includes(t))
+        pi.setActiveTools(filtered)
+      }
       return { systemPrompt: buildOrchestratorPrompt() }
     }
   })
@@ -65,6 +86,85 @@ export default function (pi: ExtensionAPI) {
     description: 'Tampilkan environment context — git, branch, test, mux, dll',
     handler: async (_args: string, cmdCtx: ExtensionCommandContext) => {
       cmdCtx.ui.notify(formatContext(gatherContext(cmdCtx.cwd)), 'info')
+    },
+  })
+
+  pi.registerCommand('ooda:config', {
+    description: 'OODA Config — view/set autoActivate, blockTools per phase',
+    handler: async (args: string, cmdCtx: ExtensionCommandContext) => {
+      const cwd = cmdCtx.cwd
+      const parts = args.trim().split(/\s+/)
+
+      // Show config
+      if (parts.length === 0 || (parts.length === 1 && parts[0] === '')) {
+        const config = loadConfig(cwd)
+        cmdCtx.ui.notify(formatConfig(config, cwd), 'info')
+        return
+      }
+
+      const sub = parts[0]
+
+      // /ooda:config autoActivate [true|false] [--global]
+      if (sub === 'autoActivate') {
+        const val = parts[1]
+        if (val !== 'true' && val !== 'false') {
+          cmdCtx.ui.notify('Usage: /ooda:config autoActivate true|false [--global]', 'warning')
+          return
+        }
+        const isGlobal = parts.includes('--global')
+        const config = isGlobal ? loadConfig(cwd) : { ...DEFAULT_CONFIG }
+        config.autoActivate = val === 'true'
+        if (isGlobal) saveGlobalConfig(config)
+        else saveLocalConfig(cwd, config)
+        cmdCtx.ui.notify(`autoActivate → ${val}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
+        return
+      }
+
+      if (sub === 'block') {
+        const phase = parts[1] as OodaPhase
+        const tools = parts.slice(2).filter(p => p !== '--global')
+        const isGlobal = parts.includes('--global')
+        if (!phase || tools.length === 0) {
+          cmdCtx.ui.notify('Usage: /ooda:config block <phase> <tool...> [--global]', 'warning')
+          return
+        }
+        const config = loadConfig(cwd)
+        const blocked = config.blockTools[phase] || []
+        config.blockTools[phase] = [...new Set([...blocked, ...tools])]
+        if (isGlobal) saveGlobalConfig(config)
+        else saveLocalConfig(cwd, config)
+        cmdCtx.ui.notify(`🔒 ${phase}: ${config.blockTools[phase]!.join(', ')}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
+        return
+      }
+
+      if (sub === 'unblock') {
+        const phase = parts[1] as OodaPhase
+        const tools = parts.slice(2).filter(p => p !== '--global')
+        const isGlobal = parts.includes('--global')
+        if (!phase || tools.length === 0) {
+          cmdCtx.ui.notify('Usage: /ooda:config unblock <phase> <tool...> [--global]', 'warning')
+          return
+        }
+        const config = loadConfig(cwd)
+        const blocked = config.blockTools[phase] || []
+        config.blockTools[phase] = blocked.filter((t: string) => !tools.includes(t))
+        if (isGlobal) saveGlobalConfig(config)
+        else saveLocalConfig(cwd, config)
+        cmdCtx.ui.notify(`🔓 ${phase}: ${config.blockTools[phase]!.join(', ') || 'none'}${isGlobal ? ' (global)' : ' (local)'}`, 'info')
+        return
+      }
+
+      // /ooda:config clear [--global]
+      if (sub === 'clear') {
+        const isGlobal = parts.includes('--global')
+        if (isGlobal) clearGlobalConfig()
+        else clearLocalConfig(cwd)
+        cmdCtx.ui.notify(`Config reset to defaults${isGlobal ? ' (global)' : ' (local)'}`, 'info')
+        return
+      }
+
+      // Unknown subcommand
+      cmdCtx.ui.notify(`Unknown subcommand: ${sub}. Use: autoActivate, block, unblock, clear`, 'warning')
     },
   })
 
