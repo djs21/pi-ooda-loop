@@ -1,6 +1,6 @@
 // ─── OODA Loop Extension — Composition Root ──────────────
 
-import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from '@earendil-works/pi-coding-agent'
+import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent'
 import { handlePlan } from './plan/handler'
 import { handleTdd } from './tdd/handler'
 import { handleStart } from './start/handler'
@@ -12,12 +12,10 @@ import { analyzeWorkers, formatInsights } from './supervisor/thinker'
 import { gatherContext, formatContext } from './supervisor/all-knowing'
 import { buildOrchestratorPrompt } from './supervisor/ooda-brain'
 
-export function activate(api: ExtensionAPI, ctx: ExtensionContext): void {
-  const cwd = ctx.cwd
-
+export default function (pi: ExtensionAPI) {
   // ─── System Prompt Injection ──────────────────────────
-  api.on('before_agent_start', async (_event: unknown) => {
-    const state = loadState(cwd)
+  pi.on('before_agent_start', async (_event: unknown, ctx: any) => {
+    const state = loadState(ctx.cwd)
     if (state?.oodaMode) {
       return { systemPrompt: buildOrchestratorPrompt() }
     }
@@ -25,18 +23,17 @@ export function activate(api: ExtensionAPI, ctx: ExtensionContext): void {
 
   // ─── OODA Mode Activation ─────────────────────────────
 
-  api.registerCommand('ooda:activate', {
+  pi.registerCommand('ooda:activate', {
     description: 'Aktifkan OODA Orchestrator Mode — agent jadi all-seeing, all-knowing, all-thinking',
     handler: async (_args: string, cmdCtx: ExtensionCommandContext) => {
+      const cwd = cmdCtx.cwd
       let state = loadState(cwd)
       if (!state) state = createNewState()
       state.oodaMode = true
       state.phase = 'observing'
       saveState(cwd, state)
 
-      // Gather context immediately
       const env = gatherContext(cwd)
-
       cmdCtx.ui.notify([
         '🎯 OODA Orchestrator Mode ACTIVE',
         '',
@@ -51,32 +48,32 @@ export function activate(api: ExtensionAPI, ctx: ExtensionContext): void {
     },
   })
 
-  api.registerCommand('ooda:deactivate', {
+  pi.registerCommand('ooda:deactivate', {
     description: 'Nonaktifkan OODA Orchestrator Mode — kembali ke mode normal',
     handler: async (_args: string, cmdCtx: ExtensionCommandContext) => {
+      const cwd = cmdCtx.cwd
       let state = loadState(cwd)
       if (!state) state = createNewState()
       state.oodaMode = false
       state.phase = 'idle'
       saveState(cwd, state)
-
       cmdCtx.ui.notify('OODA Orchestrator Mode DEACTIVATED. Kembali ke mode normal.', 'info')
     },
   })
 
-  api.registerCommand('ooda:context', {
+  pi.registerCommand('ooda:context', {
     description: 'Tampilkan environment context — git, branch, test, mux, dll',
     handler: async (_args: string, cmdCtx: ExtensionCommandContext) => {
-      const env = gatherContext(cwd)
-      cmdCtx.ui.notify(formatContext(env), 'info')
+      cmdCtx.ui.notify(formatContext(gatherContext(cmdCtx.cwd)), 'info')
     },
   })
 
   // ─── OODA Cycle Commands ─────────────────────────────
 
-  api.registerCommand('ooda:plan', {
+  pi.registerCommand('ooda:plan', {
     description: 'OODA Plan — scout, PRD, plan, task grouping, batch design',
     handler: async (args: string, cmdCtx: ExtensionCommandContext) => {
+      const cwd = cmdCtx.cwd
       const state = loadState(cwd)
       if (!state?.oodaMode) {
         cmdCtx.ui.notify('⚠️ OODA mode tidak aktif. Jalankan /ooda:activate dulu.', 'warning')
@@ -87,9 +84,10 @@ export function activate(api: ExtensionAPI, ctx: ExtensionContext): void {
     },
   })
 
-  api.registerCommand('ooda:tdd', {
+  pi.registerCommand('ooda:tdd', {
     description: 'OODA TDD — design RED-GREEN-REFACTOR gates per task',
     handler: async (args: string, cmdCtx: ExtensionCommandContext) => {
+      const cwd = cmdCtx.cwd
       const state = loadState(cwd)
       if (!state?.oodaMode) {
         cmdCtx.ui.notify('⚠️ OODA mode tidak aktif. Jalankan /ooda:activate dulu.', 'warning')
@@ -99,29 +97,30 @@ export function activate(api: ExtensionAPI, ctx: ExtensionContext): void {
     },
   })
 
-  api.registerCommand('ooda:start', {
+  pi.registerCommand('ooda:start', {
     description: 'OODA Execute — spawn workers in mux panes, all-seeing supervision',
     handler: async (_args: string, cmdCtx: ExtensionCommandContext) => {
       if (!isMuxAvailable()) {
         cmdCtx.ui.notify(`⚠️ ${muxSetupHint()}`, 'warning')
         return
       }
-      cmdCtx.ui.notify(await handleStart(cmdCtx, cwd), 'info')
+      cmdCtx.ui.notify(await handleStart(cmdCtx, cmdCtx.cwd), 'info')
     },
   })
 
-  api.registerCommand('ooda:signoff', {
+  pi.registerCommand('ooda:signoff', {
     description: 'OODA Sign-off — merge, push, archive, close issues',
     handler: async (_args: string, cmdCtx: ExtensionCommandContext) => {
-      cmdCtx.ui.notify(await handleSignoff(cmdCtx, cwd), 'info')
+      cmdCtx.ui.notify(await handleSignoff(cmdCtx, cmdCtx.cwd), 'info')
     },
   })
 
   // ─── Supervision Commands ─────────────────────────────
 
-  api.registerCommand('ooda:status', {
+  pi.registerCommand('ooda:status', {
     description: 'OODA Status — show all worker panes, output, and insights',
     handler: async (_args: string, cmdCtx: ExtensionCommandContext) => {
+      const cwd = cmdCtx.cwd
       const state = loadState(cwd)
       if (!state || state.phase === 'idle') {
         cmdCtx.ui.notify('No active OODA session.', 'info')
@@ -138,7 +137,7 @@ export function activate(api: ExtensionAPI, ctx: ExtensionContext): void {
     },
   })
 
-  api.registerCommand('ooda:read', {
+  pi.registerCommand('ooda:read', {
     description: 'OODA Read — show output from a specific worker pane',
     handler: async (args: string, cmdCtx: ExtensionCommandContext) => {
       const workerId = args.trim()
@@ -153,22 +152,23 @@ export function activate(api: ExtensionAPI, ctx: ExtensionContext): void {
     },
   })
 
-  api.registerCommand('ooda:reset', {
+  pi.registerCommand('ooda:reset', {
     description: 'OODA Reset — clear session state',
     handler: async (_args: string, cmdCtx: ExtensionCommandContext) => {
-      clearState(cwd)
+      clearState(cmdCtx.cwd)
       cmdCtx.ui.notify('🔄 OODA session reset.', 'info')
     },
   })
 
   // ─── Tool for the Agent ────────────────────────────
-  api.registerTool({
+  pi.registerTool({
     name: 'ooda_status',
     label: 'OODA Status',
     description: 'Show current OODA cycle status — workers, batches, insights',
     promptSnippet: 'Check the status of all running OODA workers',
     parameters: {},
     execute: async () => {
+      const cwd = process.cwd()
       const state = loadState(cwd)
       if (!state || state.phase === 'idle') {
         return { content: [{ type: 'text', text: '{"phase":"idle"}' }], details: {} }
