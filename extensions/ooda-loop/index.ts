@@ -13,8 +13,12 @@ import { gatherContext, formatContext } from './supervisor/all-knowing'
 import { buildOrchestratorPrompt } from './supervisor/ooda-brain'
 import { loadConfig, saveLocalConfig, saveGlobalConfig, clearLocalConfig, clearGlobalConfig, getBlockedTools, formatConfig, DEFAULT_CONFIG } from './shared/config'
 import type { OodaPhase } from './shared/types'
+import { SupervisorHeartbeat } from './supervisor/heartbeat'
 
 export default function (pi: ExtensionAPI) {
+  // ─── Supervisor Heartbeat ──────────────────────────
+  const heartbeat = new SupervisorHeartbeat(pi)
+  pi.on('session_shutdown', () => { heartbeat.stop(); })
   // ─── System Prompt Injection ──────────────────────────
   pi.on('before_agent_start', async (_event: unknown, ctx: any) => {
     const cwd = ctx.cwd
@@ -38,7 +42,7 @@ export default function (pi: ExtensionAPI) {
         const filtered = active.filter((t: string) => !blocked.includes(t))
         pi.setActiveTools(filtered)
       }
-      return { systemPrompt: buildOrchestratorPrompt() }
+      return { systemPrompt: buildOrchestratorPrompt() + '\n\n## OODA Supervise Tool\nUse `ooda_supervise` to start/stop periodic supervision heartbeat during acting phase. This schedules automatic worker checks so you don\'t need blocking sleeps.' }
     }
   })
 
@@ -295,6 +299,31 @@ export default function (pi: ExtensionAPI) {
         }) }],
         details: {},
       }
+    },
+  })
+
+  // ─── Supervise Tool for the Agent ────────────────────
+  pi.registerTool({
+    name: 'ooda_supervise',
+    label: 'OODA Supervise',
+    description: 'Start/stop periodic supervision heartbeat during acting phase. Agent calls this to schedule automatic worker checks.',
+    promptSnippet: 'Use ooda_supervise to start/stop periodic worker checks instead of blocking sleep',
+    parameters: {
+      action: { type: 'string', enum: ['start', 'stop', 'status'], description: 'start=begin periodic checks, stop=cancel, status=show current state' },
+      interval_seconds: { type: 'number', description: 'Seconds between checks (15-300, default 30)', default: 30 },
+    },
+    execute: async (_id: string, params: { action: string; interval_seconds?: number }) => {
+      if (params.action === 'start') {
+        const msg = heartbeat.start(params.interval_seconds ?? 30)
+        return { content: [{ type: 'text', text: msg }], details: {} }
+      }
+      if (params.action === 'stop') {
+        const msg = heartbeat.stop() || 'No active supervision'
+        return { content: [{ type: 'text', text: msg }], details: {} }
+      }
+      // status
+      const state = heartbeat.getState()
+      return { content: [{ type: 'text', text: JSON.stringify(state || { active: false }) }], details: {} }
     },
   })
 }
