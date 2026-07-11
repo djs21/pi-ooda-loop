@@ -81,8 +81,6 @@ When the user requests a durable behavior change, record it here or in the relev
 
 ## Child DOX Index
 
-## Child DOX Index
-
 | Path | Purpose |
 |---|---|
 | `/README.md` | Project docs: install, commands, architecture |
@@ -90,5 +88,5 @@ When the user requests a durable behavior change, record it here or in the relev
 | `/.gitignore` | Ignores: .ooda-state.json, .worktrees, .pi/runtime dirs, openspec |
 
 Parent owns: project-wide DOX, git conventions, install instructions.
+
 Extension code lives in `extensions/ooda-loop/` — each slice (plan, tdd, start, signoff)
-is a vertical domain boundary with its own handler and tests.
